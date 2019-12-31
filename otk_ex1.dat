@@ -1,0 +1,10 @@
+name       	OTK EXAMPLE 1
+description     Model demo.
+toolkit    	OBJECT
+creo_type  	PARAMETRIC
+startup    	dll
+exec_file  D:\Learn_Code\creo\ice\otk_exe1\x64\Release\otk_exe1.dll
+text_dir   	D:\Learn_Code\creo\ice\otk_exe1\text
+allow_stop 	true
+delay_start 	false
+end
