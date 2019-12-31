@@ -139,23 +139,17 @@ pfcDrawing_ptr OpenDrawingOfModel(pfcModel_ptr model) throw(xthrowable)
 }
 
 void Ex1CommmandListener::OnCommand()
-{
-	
+{	
 		pfcSession_ptr Sess = pfcGetProESession();
 		wfcWSession_ptr wSess = wfcWSession::cast(Sess);
-		try
-		{
-			//wSess->UIShowMessageDialog("Got it !", NULL);
-			pfcModel_ptr model = wSess->GetCurrentModel();
-			if (NULL == model) return;
-			if (pfcMDL_PART != model->GetType() && pfcMDL_ASSEMBLY != model->GetType()) return;
-			OpenDrawingOfModel(model);
-		}
-		xcatchbegin
-			xcatchcip(x) {
-			LogException(x);
-		}
-		xcatchend
 
+		//wSess->UIShowMessageDialog("Got it !", NULL);
+		pfcModel_ptr model = wSess->GetCurrentModel();
+		if (NULL == model) return;
+		if (pfcMDL_PART != model->GetType() && pfcMDL_ASSEMBLY != model->GetType()) return;
+		OpenDrawingOfModel(model);
+	
 	
 }
+
+
