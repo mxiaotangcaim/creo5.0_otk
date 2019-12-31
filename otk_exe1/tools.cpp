@@ -32,3 +32,4 @@ void LogException(xthrowable_ptr x) {
 	}
 	errMsg += x->getCipTypeName(); LogMsg(errMsg, true);
 }
+//
