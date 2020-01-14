@@ -16,8 +16,12 @@
 // TODO:  在此处引用程序需要的其他头文件
 #include <wfcGlobal.h>
 #include <wfcSession.h>
+#include <pfcSession.h>
 #include <pfcExceptions.h>
+#include <pfcFeature.h>
+#include <pfcComponentFeat.h>
 #include "tools.h"
-
-
+#include "OTK_Base.h"
+#include <vector>
+#include <set>
 

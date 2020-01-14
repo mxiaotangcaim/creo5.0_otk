@@ -1,5 +1,5 @@
-name       	OTK EXAMPLE 1
-description     Model demo.
+name       	Wood'Box
+description     Wood'Box--OTK C++ APPLICATION
 toolkit    	OBJECT
 creo_type  	PARAMETRIC
 startup    	dll

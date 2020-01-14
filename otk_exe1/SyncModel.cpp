@@ -244,13 +244,206 @@ void SyncModel::BatchRename(xstring prefix)
 	mSolid->Save();
 	
 }
-
+/*
+Function: 备份同步模型（模型及同名绘图）到指定目录
+@toPath: 备份的目标目录路径
+Return: xtrue则备份成功，xfalse则失败
+*/
 xbool SyncModel::BackupTo(xstring toPath)
 {
+	if (toPath.IsNull()) return xfalse;
+	try
+	{
+		xstring solidFile = GetFileNameWithVersion(mSolid);
+		CopyFile(mNameData->GetDirectoryPath() + solidFile, toPath + solidFile, true);
+		if (mDrawing!=NULL)
+		{
+			xstring drwFile = GetFileNameWithVersion(mDrawing);
+			CopyFile(mNameData->GetDirectoryPath() + drwFile, toPath + drwFile, true);
+		}
+		return xtrue;
+	}
+   
+	OTK_EXCEPTION_HANDLE
+
+	return xbool();
+}/*
+Function: 同步模型的同步备份功能
+*/
+xbool SyncModel::Backup()
+{
+	xstring toPath = xstringnil;
+	try
+	{
+		DisplayMessage(mSess, "SelectFolder");
+		pfcDirectorySelectionOptions_ptr dirOpts = pfcDirectorySelectionOptions::Create();
+		dirOpts->SetDefaultPath(mSess->GetCurrentDirectoryW());
+		dirOpts->SetDialogLabel("Select a folder");
+		toPath = mSess->UISelectDirectory(dirOpts);
+		if (mSolid->GetType()==pfcMDL_ASSEMBLY)
+		{
+			set<string> mfs;
+			ExtractModelFiles(pfcAssembly::cast(mSolid), mfs);
+			SyncModel *sm = new SyncModel();
+			for (set<string>::iterator it = mfs.begin(); it != mfs.end(); ++it) {
+				sm->SetModel(mSess->GetModelFromFileName((*it).data()));
+				sm->BackupTo(toPath);
+			}
+			delete sm;
+		}
+		else
+		{
+			BackupTo(toPath);
+		}
+
+		DisplayMessage(mSess, "DoneBackup");
+
+		return xtrue;
+	}
+
+	OTK_EXCEPTION_HANDLE
+
+		return xfalse;
+
 	return xbool();
 }
 
-xbool SyncModel::Backup()
+/*
+Function: 同步组件的元件遍历客户端应用动作函数。
+*/
+wfcStatus SyncModelVisitor::ApplyAction(pfcObject_ptr pfc_object, wfcStatus filter_status)
 {
-	return xbool();
+	if (wfcTK_NO_ERROR == filter_status)
+	{
+		try
+		{
+			wfcWComponentFeat_ptr comFeat = wfcWComponentFeat::cast(pfc_object);
+			pfcModelDescriptor_ptr descr = comFeat->GetModelDescr();
+			pfcModel_ptr model = mSess->GetModelFromDescr(descr);
+			SyncModel *sm = new SyncModel(model);
+			sm->CreateDrawing(xfalse);
+			delete sm;
+		}
+		OTK_EXCEPTION_HANDLE
+
+			return	wfcTK_NO_ERROR;
+	}
+
+	else
+	{
+		return filter_status;
+	}
+
+}
+
+/*
+Function: 同步模型的动作监听器响应代码，根据命令名称调用对应的操作函数。
+*/
+void SyncModelListener::OnCommand()
+{
+	SyncModel *syncModel = NULL;
+
+	try {
+
+		pfcModel_ptr curModel = NULL;
+		pfcSession_ptr sess = pfcGetProESession();
+		pfcSelectionBuffer_ptr selBuff = sess->GetCurrentSelectionBuffer();
+		pfcSelections_ptr sels = selBuff->GetContents();
+		if (sels != NULL && sels->getarraysize() == 1) {
+			pfcSelection_ptr sel = sels->get(0);
+			curModel = sel->GetSelModel();
+			if (curModel != NULL && (curModel->GetType() != pfcMDL_ASSEMBLY && curModel->GetType() != pfcMDL_PART)) {
+				curModel = NULL;
+			}
+		}
+
+		syncModel = new SyncModel(curModel);
+
+		if (GetIsCommand("OpenDrawing")) {
+			syncModel->OpenDrawing();
+		}
+		else if (GetIsCommand("CreateDrawing")) {
+			syncModel->CreateDrawing();
+		}
+		else if (GetIsCommand("BatchDrawing")) {
+			syncModel->BatchDrawing();
+		}
+		else if (GetIsCommand("SyncRename")) {
+			syncModel->Rename();
+		}
+		else if (GetIsCommand("SyncBackup")) {
+			syncModel->Backup();
+		}
+		else if (GetIsCommand("BatchRename")) {
+			syncModel->BatchRename(xstringnil);
+		}
+	}
+	OTK_EXCEPTION_HANDLE
+
+	if (NULL != syncModel) delete syncModel;
+
+}
+/*
+Function: 同步功能的命令访问状态监听器
+*/
+pfcCommandAccess SyncAccessListener::OnCommandAccess(xbool AllowErrorMessages)
+{
+	try {
+
+		pfcSession_ptr sess = pfcGetProESession();
+		pfcModel_ptr model = sess->GetCurrentModel();
+		if (NULL == model) return pfcACCESS_UNAVAILABLE;
+
+		pfcModelType modelType = model->GetType();
+		if (pfcMDL_PART != modelType && pfcMDL_ASSEMBLY != modelType) return pfcACCESS_UNAVAILABLE;
+
+		//零件状态下批量功能不可访问
+		if (pfcMDL_PART == modelType && (GetIsCommand("BatchRename") || GetIsCommand("BatchDrawing"))) return pfcACCESS_UNAVAILABLE;
+
+		return pfcACCESS_AVAILABLE;
+	}
+
+	OTK_EXCEPTION_HANDLE
+
+	return pfcACCESS_UNAVAILABLE;
+}
+
+/*
+Function: 实现模型改名动作监听器的OnBeforeModelRename方法，在模型改名前先载入同名绘图
+@Container: 包含改名前后的两个模型描述器的容器。
+*/
+void SyncRenameSessionListener::OnBeforeModelRename(pfcDescriptorContainer2_ptr Container)
+{
+	try {
+
+		pfcSession_ptr session = pfcGetCurrentSession();
+		pfcModel_ptr curModel = session->GetActiveModel();
+		if (curModel->GetType() != pfcMDL_PART && curModel->GetType() != pfcMDL_ASSEMBLY) return;
+		pfcModelDescriptor_ptr drwDesc = pfcModelDescriptor::Create(pfcMDL_DRAWING, curModel->GetInstanceName(), NULL);
+		pfcModel_ptr drwModel = session->RetrieveModel(drwDesc);
+
+	}
+	OTK_EXCEPTION_HANDLE
+
+}
+/*
+Function: 实现模型改名动作监听器的OnAfterModelRename方法，在模型改名后同步修改同名绘图名称并保存。
+@FromMdl: 改名前的模型描述器
+@ToMdl: 改名后的模型描述器
+*/
+void SyncRenameModelListener::OnAfterModelRename(pfcModelDescriptor_ptr FromMdl, pfcModelDescriptor_ptr ToMdl)
+{
+	try {
+
+		pfcSession_ptr session = pfcGetCurrentSession();
+		if (FromMdl->GetType() != pfcMDL_PART && FromMdl->GetType() != pfcMDL_ASSEMBLY) return;
+		pfcModelDescriptor_ptr drwDesc = pfcModelDescriptor::Create(pfcMDL_DRAWING, FromMdl->GetInstanceName(), NULL);
+		pfcModel_ptr drw = session->GetModelFromDescr(drwDesc);
+		if (drw != NULL) {
+			drw->Rename(ToMdl->GetInstanceName(), xtrue);
+			drw->Save();
+		}
+
+	}
+	OTK_EXCEPTION_HANDLE
 }
